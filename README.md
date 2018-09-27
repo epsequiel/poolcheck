@@ -37,8 +37,8 @@ Pool 10.8.4.0/24 status
 ```
 
 ## TODO
-[x] 1- ipcalc: verificar que el pool de entrada sea un bloque ipv4 valido
-[] 2- chequear que ese bloque esta declarado en dhcpd.conf
-[] 3- leer la conf de poolcheck.conf
-[] 4- cargar la key-ssh para poder consultar el estado del failover ¿hace falta?
+- [x] 1. ipcalc: verificar que el pool de entrada sea un bloque ipv4 valido
+- [ ] 2. chequear que ese bloque esta declarado en dhcpd.conf
+- [ ] 3. leer la conf de poolcheck.conf
+- [ ] 4. cargar la key-ssh para poder consultar el estado del failover ¿hace falta?
 
