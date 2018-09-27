@@ -12,14 +12,14 @@
 # Tambien da informacion de como esta funcionando el failover y balanceo.
 #
 # TODO:
-#
-#   1- ipcalc: verificar que el pool de entrada sea un bloque ipv4 valido [[ DONE ]]
+#   1- ipcalc: verificar que el pool de entrada sea un bloque ipv4 valido
 #   2- chequear que ese bloque esta declarado en dhcpd.conf
 #   3- leer la conf de poolcheck.conf
 #   4- cargar la key-ssh para poder consultar el estado del failover ¿hace falta?
 
 
 IPCALC="/usr/bin/ipcalc"
+VERSION="0.2"
 
 #-------------------------------------------------------------------------------
 # Colores
@@ -33,13 +33,15 @@ _ROJO="\e[38;5;196m"
 _NC="\e[0m"             # no color
 
 
+function header() {
+    printf "Pool check $VERSION (https://github.com/epsequiel/poolcheck)\n"
+}
 
 #-------------------------------------------------------------------------------
 # Ayuda
 #
 function help() {
     # llamada al script
-    printf "Pool check 0.2 (https://github.com/epsequiel/poolcheck)"
     printf "\n\n$_AMARILLO"
     printf "    Uso:\n"
     printf "        pool_check.sh [hd] -p <bloque>\n"
@@ -229,6 +231,7 @@ LIST_PARM=$@
 while getopts ":p:hdv" opt; do
     case $opt in
         p)  # Bloque ip
+            header
             POOL=${OPTARG}
             if [ $($IPCALC $POOL | head -1 | cut -f1 -d' ') = "INVALID" ]; then
                 printf "Este pool NO es un pool ipv4 VALIDO PAPA!\n\n"
@@ -237,10 +240,12 @@ while getopts ":p:hdv" opt; do
             get_pool_status ${OPTARG}
             ;;
         h)  # help
+            header
             help
             exit 1
             ;;
         d)  # descripcion parametros
+            header
             parametros
             exit 1
             ;;
