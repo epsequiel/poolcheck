@@ -1,25 +1,31 @@
-
 #!/bin/bash
 
 # Pool Check
 # Archivos: pool_check.sh
 # Autor:    Ezequiel Meinero
 # Fecha:    2018-09-19
-# Version:  0.1
+# Version:  0.2
 #
 # Este script revisa el estado de los leases de un determinado pool que introducimos
 # como argumento en la llamada.
 # Sirve para saber si el pool se completo o quedan ips disponibles.
 # Tambien da informacion de como esta funcionando el failover y balanceo.
 #
-# TODO: verificar que el pool de entrada sea un bloque ipv4 valido y luego chequear
-#       que ese bloque esta declarado en el dhcpd.
+# TODO:
+#   1- ipcalc: verificar que el pool de entrada sea un bloque ipv4 valido [[ DONE ]]
+#   2- chequear que ese bloque esta declarado en dhcpd.conf
+#   3- leer la conf de poolcheck.conf
+#   4- cargar la key-ssh para poder consultar el estado del failover ¿hace falta?
+
+
+IPCALC="/usr/bin/ipcalc"
 
 #-------------------------------------------------------------------------------
 # Colores
 #
 _VIOLETA="\e[38;5;201m"
 _NARANJA="\e[38;5;208m"
+_AMARILLO="\e[38;5;226m"
 _AZUL="\e[38;5;038m"
 _VERDE="\e[38;5;048m"
 _ROJO="\e[38;5;196m"
@@ -27,26 +33,30 @@ _NC="\e[0m"             # no color
 
 
 
+#-------------------------------------------------------------------------------
+# Ayuda
+#
 function help() {
     # llamada al script
-    printf "\n"
+    printf "Pool check 0.2 (https://github.com/epsequiel/poolcheck)"
+    printf "\n\n$_AMARILLO"
+    printf "    Uso:\n"
+    printf "        pool_check.sh [hd] -p <bloque>\n"
     printf "\n"
     printf "$_VERDE"
-    printf "    ===+=== pool_check.sh ===+===\n"
+    printf "       +=== pool_check.sh ===+   \n"
     printf "    Este script revisa el estado de los leases de un determinado pool que\n"
     printf "    introducimos como argumento en la llamada.\n"
     printf "    Sirve para saber si el pool se completo o quedan ips disponibles.\n"
     printf "    Tambien da informacion de como esta funcionando el failover y balanceo.\n"
-    printf "\n"
-    printf "    Uso:\n"
-    printf "        pool_check.sh -b <bloque>\n"
     printf "\n$_NC"
-    # fuente de la informacion
-    printf "[+] Fuentes de info:\n"
-    printf "    * http://www.ipamworldwide.com/ipam/dhcp-declare-failover.html\n"
-    printf "    * https://source.isc.org/cgi-bin/gitweb.cgi?p=dhcp.git;a=blob;f=server/failover.c\n"
-    printf "    * https://github.com/42wim/isc-dhcp/blob/master/server/failover.c\n"
+    printf "\t -p <bloque ipv4/prefix> es el bloque del que queremos conocer el estado\n"
+    printf "\t -h\tEsta ayuda\n"
+    printf "\t -d\tDescripcion de los parametros que se imprimen en el resultado\n"
     printf "\n"
+}
+
+function parametros() {
     #
     # total 500  free 388  backup 88  lts -150  max-misbal
 
@@ -72,14 +82,38 @@ function help() {
         which  a  lease  may  be  renewed  by either failover peer
         without contacting the other.\n"
     printf "\n"
-
+    # total
+    printf "[+] total;"
+    printf "
+        Cantidad total de ips disponibles en el pool\n"
+    printf "\n"
+    # free
+    printf "[+] free;"
+    printf "
+        Cantidad de ips libres en este servidor para ser asignadas\n"
+    printf "\n"
+    # backup
+    printf "[+] backup ips;"
+    printf "
+        Cantidad de ips libres...\n"
+    printf "\n"
+    # max-own
+    printf "[+] max-own;"
+    printf "
+        Cantidad de ips libres en este servidor por sobre el failover\n"
+    printf "\n"
+    # max-misbal
+    printf "[+] max-misbal;"
+    printf "
+        Cantidad de ips libres en este servidor antes de ejecutar un
+        balanceo forzado\n"
+    printf "\n"
     # split
     printf "[+] split;"
     printf "
         Es un registro de 8 bits y por lo tanto 128 es el valor intermedio
         One form of load balancing where 128 is 50%%/50%% and 256 is 100%%/0%%.\n"
     printf "\n"
-
     # port
     printf "[+] port;"
     printf "
@@ -96,6 +130,13 @@ function help() {
     printf "[+] load-balance-max-seconds N"
     printf "
         Serve other server's client requests if DHCP header \"SECS\" value is greater than N.\n"
+    printf "\n"
+    # fuente de la informacion
+    printf "[+] Fuentes de info:\n"
+    printf "    * http://www.ipamworldwide.com/ipam/dhcp-declare-failover.html\n"
+    printf "    * https://source.isc.org/cgi-bin/gitweb.cgi?p=dhcp.git;a=blob;f=server/failover.c\n"
+    printf "    * https://github.com/42wim/isc-dhcp/blob/master/server/failover.c\n"
+    printf "\n"
 
 }
 
@@ -154,10 +195,11 @@ function get_pool_status() {
     MAX_MISBAL=$(echo $DATA | awk '{print $38}')
 
     printf "\n"
+    printf "[*] Pool hash: %s\n" $POOL_HASH
+    printf "\n"
     printf "$_NARANJA[*] Balancing: %s\n$_NC" $BALANCING
-    printf "[-] Pool hash: %s\n" $POOL_HASH
     printf "$_AZUL[-] Total ips: %d\n$_NC" $TOTAL_IPS
-    printf "[-] Free ips: %d\n" $FREE_IPS
+    printf "$_AZUL[-] Free ips: %d\n$_NC" $FREE_IPS
     printf "[-] Backup ips: %d\n" $BACKUP_IPS
     printf "[-] lts: %d\n" $LTS_PRE
     printf "[-] Max-own: %s\n" $MAX_OWN
@@ -183,13 +225,22 @@ fi
 
 LIST_PARM=$@
 
-while getopts ":b:h:v" opt; do
+while getopts ":p:hdv" opt; do
     case $opt in
-        b)  # Bloque ip
+        p)  # Bloque ip
+            POOL=${OPTARG}
+            if [ $($IPCALC $POOL | head -1 | cut -f1 -d' ') = "INVALID" ]; then
+                printf "Este pool NO es un pool ipv4 VALIDO PAPA!\n\n"
+                exit 1
+            fi
             get_pool_status ${OPTARG}
             ;;
-        h)      # help
-            Uso
+        h)  # help
+            help
+            exit 1
+            ;;
+        d)  # descripcion parametros
+            parametros
             exit 1
             ;;
         :)
