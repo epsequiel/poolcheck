@@ -12,6 +12,7 @@
 # Tambien da informacion de como esta funcionando el failover y balanceo.
 #
 # TODO:
+#
 #   1- ipcalc: verificar que el pool de entrada sea un bloque ipv4 valido [[ DONE ]]
 #   2- chequear que ese bloque esta declarado en dhcpd.conf
 #   3- leer la conf de poolcheck.conf
